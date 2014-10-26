@@ -1,4 +1,14 @@
 FacebookLogin::Application.routes.draw do
+  root :to => "user#show_login"
+
+  get "user/show_login"
+
+  get "user/show_profile"
+
+  get "user/login"
+
+  get "user/logout"
+
   # The priority is based upon order of creation:
   # first created -> highest priority.
 

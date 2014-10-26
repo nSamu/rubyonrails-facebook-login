@@ -1,0 +1,20 @@
+<section id="user-login">
+  <h2>Wellcome <%= @user[:name] %>!</h2>
+
+  <p>This is your profile:</p>
+
+  <dl>
+    <dt>ID</dt>
+    <dd><%= @user[:id] %></dd>
+
+    <dt>E-mail</dt>
+    <dd><%= @user[:email] %></dd>
+
+    <dt>Facebook id</dt>
+    <dd><%= @user[:facebook_id] %></dd>
+  </dl>
+
+  <form action="<%= user_logout_url %>" method="get">
+    <button type="submit">Logout</button>
+  </form>
+</section>

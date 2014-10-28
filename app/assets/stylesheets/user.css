@@ -1,0 +1,26 @@
+/* Bejelentkezés */
+#user-login .login-exception {
+  display: block;
+  padding: 10px 0;
+  color: #b50d14;
+  text-align: center;
+  font-size: 14px;
+  font-weight: bold;
+  opacity: 0;
+}
+/* Profil */
+#user-profile dl dt {
+  width: 50%;
+  padding: 10px;
+  float: left;
+  clear: both;
+  text-align: right;
+}
+#user-profile dl dd {
+  width: 50%;
+  padding: 10px;
+  margin: 0;
+  float: right;
+  text-align: left;
+  font-weight: bold;
+}

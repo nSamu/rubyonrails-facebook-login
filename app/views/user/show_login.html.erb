@@ -3,7 +3,6 @@
 
   <p>
     With this button, you can log in with your facebook profile
-    <small class="login-exception"><%= flash[:exception] %></small>
   </p>
 
   <form id="user-login-form" action="<%= user_login_url %>" method="get">
@@ -11,4 +10,6 @@
 
     <input type="hidden" name="token"/>
   </form>
+
+  <small class="login-exception"><%= flash[:exception] %></small>
 </section>

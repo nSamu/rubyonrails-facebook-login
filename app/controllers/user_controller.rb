@@ -8,150 +8,148 @@ class UserController < ApplicationController
     @facebook_app_secret = 'f544d36180bfcd1d8e63613e9e79ea66'
   end
 
-  # Bejelentkezés form megjelenítése
+  # Display login form
   def show_login
 
-    # ha létezik bejelentkezett felhasználó, akkor megyünk a profil-ra
+    # redirect to the profile if the user is already logged in
     unless session['user'].blank?
       redirect_to :controller => 'user', :action => 'show_profile'
     end
 
   end
 
-  # Profil és kijelentkezés megjelenítése
+  # Display profile and logout screen
   def show_profile
 
-    # ha nem létezik bejelentkezett felhasználó, akkor megyünk a login-ra
+    # redirect to the login if the user doesn't logged in
     if session['user'].blank?
       redirect_to :controller => 'user', :action => 'show_login'
     end
 
-    # felhasználó lekérdezése ( a view számára ), session-ből
+    # get user data from the session
     @user = session['user']
   end
 
-  # Bejelentkezett felhasználó kijelentkeztetése (törlése session-ből)
+  # Logout the user
   def logout
     session['user'] = nil
 
     redirect_to :controller => 'user', :action => 'show_login'
   end
 
-  # Bejelentkezés kezelése
+  # Handle login or facebook oauth request/response
   def login
 
-    # ha létezik bejelentkezett felhasználó, akkor megyünk a profil-ra
+    # redirect to the profile if the user is already logged in
     unless session['user'].blank?
       redirect_to :controller => 'user', :action => 'show_profile'
       return
     end
 
-    # token alapú bejelentkezést vizsgál először. Ez az amikor már tudunk egy facebook token-t
+    # login request with facebook access token
     unless params['token'].blank?
 
       begin
 
-        # token használatával a graph-ból lekérdezzük a felhasználói adatokat
+        # load userdata from the facebook graph with the token
         result = JSON.parse(get_request("https://graph.facebook.com/v2.1/me?access_token=#{params['token']}"))
         unless result['error'].blank?
           raise Exception.new(result['error']['message'])
         end
 
-        # felhasználó lekérdezése/létrehozása
+        # get (or create) the user
         user = get_user(result)
         if user.blank?
-          raise Exception.new('Hiba a felhasználó létrehozásakor')
+          raise Exception.new('User creation error')
         end
 
-        # ha minden jó, akkor elmentük munkamenetbe
+        # save user to the session
         session['user'] = user
 
-          # ha meghatározás, vagy url betöltés közben hiba lép fel, akkor azt delegáljuk a loginnak (flash-ben küldi, átirányít)
+          # send the error message back to the login screen on exception
       rescue Exception => e
 
-        flash[:exception] = 'Facebook bejelentkezesi hiba: ' + e.message
+        flash[:exception] = 'Facebook login error: ' + e.message
         redirect_to :controller => 'user', :action => 'show_login'
         return
       end
 
-      # ha nem volt probléma, akkor átirányít a profil-ra
+      # redirect to the profile
       redirect_to :controller => 'user', :action => 'show_profile'
       return
     end
 
-    # ha van code paraméter, akkor ez valószínűleg egy hitelesítéses válasz a facebooktól
+    # check oauth response from facebook
     # TODO hiba válasz kezelése
     redirect_url = url_for(:controller => 'user', :action => 'login', :only_path => false)
     unless params['code'].blank?
 
-      # először ellenőrizzük, hogy valid-e a kérés ami visszajött
+      # CSRF attack check (optional)
       if params['state'] != session['facebook_state']
 
-        flash[:exception] = 'Facebook bejelentkezesi hiba!'
+        flash[:exception] = 'Facebook login error!'
         redirect_to :controller => 'user', :action => 'show_login'
         return
       end
 
-      # ha validáltuk, akkor a kapott kódot még be kell váltani tényleges tokenre. Sajnos a facebook annyira egységes, hogy nem az,
-      # ezért itt nem json a kimenet, hanem egy query string szerű dolog, ezért az alapján kell feldolgozni
+      # exchange the 'code' request parameter to token. The response is a query string, not JSON!
       response = get_request("https://graph.facebook.com/v2.1/oauth/access_token?client_id=#{@facebook_app_id}&redirect_uri=#{redirect_url}&client_secret=#{@facebook_app_secret}&code=#{params['code']}")
       tmp = Rack::Utils.parse_nested_query(response)
 
-      # ha valamiért nincs tokenünk, akkor a hibával visszairányítja a bejelentkezés felületre
+      # redirect back to the login screen if no access token in the response
       if tmp['access_token'].blank?
 
-        flash[:exception] = 'Facebook bejelentkezesi hiba!'
+        flash[:exception] = 'Facebook login error!'
         redirect_to :controller => 'user', :action => 'show_login'
         return
       end
 
-      # átirányítás ugyan ide, csak mostmár használható access token-el
+      # redirect here with a valid token to do the login
       redirect_to :controller => 'user', :action => 'login', :token => tmp['access_token']
       return
     end
 
-    # ha nem érekezik token, code vagy state paraméter (token: ekkor már megpróbáljuk a bejelentkezést, code és state pedig facebook-tól jöhet oauth után),
-    # akkor indítunk egy új hitelesítést a facebook felé (átirányítással)
+    # start a new oauth request when no token (this is when do the login), code or state (from facebook oauth redirect) param
 
-    # ez egy biztonsági "token", a CSRF támodások ellen, de nem kötelező a használata
+    # generate security "token" against CSRF attacks (optional)
     session['facebook_state'] = (0...50).map { ('a'..'z').to_a[rand(26)] }.join
 
-    # átirányítás a facebook hitelesítő urljére (oauth), és átadjuk (redirect_url), hogy ugyan ide kérjük a választ
+    # redirect to facebook's oauth url (with a redirect url back to the application)
     redirect_to "https://www.facebook.com/v2.1/dialog/oauth?scope=public_profile,email&response_type=code&client_id=#{@facebook_app_id}&state=#{session['facebook_state']}&redirect_uri=#{redirect_url}"
   end
 
-  # Regisztráció és/vagy felhasználó azonosítás facebook/email alapján
+  # Registrate or detect user based on parameter 'id' or 'email' index value
   def get_user(data)
 
-    # bejövő adat ellenőrzése, hogy tartalmaz-e kereshető adatokat
+    # check parameter for searchable data
     if data.blank? || (data['id'].blank? && data['email'].blank?)
       return nil
     end
 
-    # létező felhasználó keresése facebook_id vagy email alapján
+    # find the user based on facebook_id or email address
     user = User.where('facebook_id = ? OR email = ?', data['id'], data['email']).first
     if user == nil
 
-      # ha nem találunk ilyen felhasználót, akkor létrehozunk egyet az elérhető adatokból
+      # create the user if doesn't exist already
       user = User.create({:name => data['last_name'] + ' ' + data['first_name'], :email => data['email'], :facebook_id => data['id']})
     end
 
-    # létrehozott vagy lekérdezett felhasználó adatainak visszaküldése
+    # return the user data
     {:id => user.id, :name => user.name, :email => user.email, :facebook_id => user.facebook_id}
   end
 
-  # Get http kérés a megadott url-re, ssl használatával, és válasz tartalom visszadása
+  # Get http request to the given url parameter (with SSL) and return the response body
   def get_request(url)
     require 'net/http'
 
     uri = URI.parse(url)
     http = Net::HTTP.new(uri.host, uri.port)
 
-    # SSL használata, illetve a kapcsolatot létesítő felek hitelesítésének kikapcsolása (localhost környezet miatt, éles használatra ez a verify_mode nem biztonságos!)
+    # use SSL for the request, but due to the local environment disable peer verification
     http.use_ssl = true
-    http.verify_mode = OpenSSL::SSL::VERIFY_NONE
+    http.verify_mode = OpenSSL::SSL::VERIFY_NONE # FIXME remove (or comment out) this line in real production
 
-    # kérés végrehajtása
+    # do the request
     request = Net::HTTP::Get.new(uri.to_s)
     http.request(request).body
   end

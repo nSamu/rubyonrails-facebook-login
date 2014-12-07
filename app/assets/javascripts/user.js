@@ -1,5 +1,6 @@
 (function( $ ) {
 
+  // Load Facebook SDK
   window.fbAsyncInit = function() {
     FB.init( {
       appId:   '863608890326822',
@@ -7,7 +8,6 @@
       version: 'v2.1'
     } );
   };
-
   (function( d, s, id ) {
     var js, fjs = d.getElementsByTagName( s )[0];
     if( d.getElementById( id ) ) {
@@ -19,11 +19,13 @@
     fjs.parentNode.insertBefore( js, fjs );
   }( document, 'script', 'facebook-jssdk' ));
 
+  // Submit the login with the given token
   function submit( token ) {
     $( 'input[name=token]', '#user-login' ).val( token );
     $( 'form', '#user-login' ).trigger( 'submit' );
   }
 
+  // Display exception to user
   function exception( message ) {
     var $container = $( '.login-exception', '#user-login' );
 
@@ -35,7 +37,7 @@
 
   $( function() {
 
-    // első exception megjelenítés
+    // first exception display, if any
     exception();
 
     // add click event handler for facebook login
@@ -52,12 +54,12 @@
           else FB.login( function( response ) { // try login when not already
 
             if( response.status == 'connected' ) submit( response.authResponse.accessToken );
-            else exception( "Sikertelen bejelentkezés!" );
+            else exception( "Failed login!" );
           }, {auth_type: 'rerequest', scope: 'email'} );
         } );
 
       } catch( e ) {
-        exception( "A facebook API még nem aktív!" );
+        exception( "The Facebook API not yet loaded!" );
       }
     } );
   } );
